@@ -1,0 +1,577 @@
+  This code makes use of Cristophe Alard's algorithm for the creation
+  and application of a spatially varying convolution kernel, used in
+  the subtraction of 2 images with different point spread functions.
+  An input 'template' is subtracted off of an input 'image'.  Either
+  array may be convolved, and the output image may be on either
+  photmetric system.  The operations and noise determinations are
+  conducted in units of e-, and the output image is scaled using the
+  'image' GAIN.  Output images are BITPIX=-32 unless the -sht option
+  is set on the command line, due to the kernel convolution.  
+
+  ** AS OF VERSION 3.1 CALCULATIONS ARE DONE IN ADU **
+  
+  * The input images may be divided into independent regions, each of
+  which is fit for a spatially varying kernel with constant volume
+  (photometric normalization).  These may be defined in an input file
+  with each line containing 'xmin:xmax,ymin:ymax', or requested by
+  number in each dimension.
+
+  * Each region is split into a matrix of stamps, each of which is fit
+  for a constant kernel and used as a constraint for the spatially
+  varying kernel.
+
+  * The kernel in each stamp is sampled with a small substamp around a
+  bright (but non-saturated) object.  These may also be pre-selected
+  (say by SExtractor) and provided to the program in an input file
+  with each line containing 'x y'.  In this case, only these substamps
+  will be used to fit for a spatially varying kernel for the entire
+  image.
+
+  * A buffer of (half the substamp size + half the kernel size) is
+  avoided around the edge of each stamp in the detection of good
+  substamp centers.  This avoids overlap between stamps' substamps,
+  and the possible inclusion of pixels multiple times in the global
+  kernel fit.
+  
+  * Multiple substamps may be stored for each stamp, and bad substamps
+  are sigma clipped in the global fit, possibly resulting in the
+  complete rejection of a stamp.
+
+  * The user may tell the software which of the input images to
+  convolve, or the software will determine this using the noise
+  characteristics of a non-robust and preliminary convolution plus
+  subtraction, restricted to the area of the substamps.
+
+  * There are 2 approaches to determine the figure of merit used to
+  direct the convolution.  The first accumulates the average sigma per
+  pixel in the difference images, summed over all good substamps.
+  This seems formally the optimal method, but is sensitive to
+  individual pixels.  The second finds the average of the widths of
+  the pixel count distributions in the differenced substamps.
+  
+  * The region is convolved, the images are subtracted, and the output
+  image normalized by the kernel sum to lie on either the 'template'
+  or 'image' photometric system.
+
+  * The output difference image may be a multi-fits file, with
+  additional layers describing the convolved image, noise-scaled
+  (sigma) difference image, the noise image itself, or a rectified
+  difference image + associated sign image.
+
+  * The output images have a fill-valued buffer around the edges
+  corresponding to a half kernel width.  Additionally, if multiple
+  regions are requested, they are slightly expanded (such that they
+  overlap each other and end up independently convolving a similar
+  sub-set of pixels) to fairly constrain the convolution of the
+  boundary pixels.  Neighboring regions split the task of filling in
+  these edge effects in the output images.
+  
+  * Root of acronynm 'hotpants' provided by Gajus Miknaitis :
+     High Order Transformation of Psf ANd Template Subtraction
+  
+  In the case of logical errors, core dumps, or suspected bugs, please
+  provide the author with the offending images and command line
+  arguments.
+
+  peace,
+  10/07/01 acbecker@physics.bell-labs.com
+
+  ADDITIONS:
+  
+  v2.0 : Command line options -tuk, -iuk, -rkw, -hki, -sht
+
+         -tuk, -iuk : Kernel fit threshold lower than masking threshold
+         -hki       : Output kernel info as multifits-layer binary table
+         -sht       : Output images are short-valued for size and compression
+
+         The masking is done conservatively for the kernel
+         determination, spreading both input images by -mins.
+         However, for the output mask, only the convolved image's mask
+         is spread by -mous, then OR'd with the other image's mask.
+
+         High sigma masking (-mt, outMaskThresh) has been deprecated.
+         
+         Also, if we use -sht we have to truncate the output pixel
+         values, necessary in the case of extreme photometric
+         rescaling.
+
+         
+         Command line options -inim, -tmplim, -outim 
+         
+         Images are now entered using the command line options -inim,
+         -tmpim, -outim, instead of some hardwired order (which just
+         seemed to be backwards in version 1).
+
+
+  v2.1 : Command line option -wcsr, -tr, -ir, -tp, -ip
+
+         Correct though more lengthy calculation of the noise in the
+         difference image
+
+         As part of astronomy's on-going effort to remain compliant with
+         SDSS actions, command line options -tp, -ip.  And just to be
+         clear, as soon as the fits matrix is read in, this pedestal is
+         subtracted off, and the result is multiplied by the gain.  All
+         upper and lower threholds are treated similarly, and hence are
+         with respect to the pedestal'd image.
+
+         The noise image is now masked out as the difference image is.
+
+  v2.2 : Command line options -ini, -tni
+         
+         Accepts input noise images with -ini, -tni.  These noise
+         images are meant to represent ALL the noise in the image,
+         meaning we thus assume the readnoise is zero.  They should be
+         in natural noise units (e-) since we do not scale by GAIN,
+         have no RDNOISE, and should NOT have a pedestal.
+
+  v3.0 : Command line options -ki, -kcs
+
+         -ki  : accept input image containing convolution kernel.
+         -kcs : size of the convolution step.  default is fwKernel.
+                speed vs. accuracy.  for spatially varying kernel, it
+                might vary significantly over the size of this step,
+                leading to systematic error.
+
+         Now able to accept input fitsfile which contains a binary
+         table containing the pre-computed convolution kernel
+         parameters.  Primarily to ease efficiency calculations.  Also
+         can adjust size of the spatial convolution step.  
+
+         Explicitly checked the photometric normalization.  Find it is
+         correct to ~%0.025, error increasing with higher order
+         spatial variation, presumably due to roundoff error.  This
+         will be furthur elaborated upon in future versions.
+
+  v3.1 : Command line options -nbs, -nbz
+
+         -nbs : BSCALE for output noise image, losing resolution mucks
+                up noise estimate.
+         -nbz : BZERO for noise image
+
+         Have converged back to ADU calculation and not e-.  This is
+         due to the complications brought about by accepting input
+         noise images.  These have likely been remapped and thus the
+         gain for any particular pixel is ambiguous.  So accept and do
+         everything in ADUs.  Note thus the noise image is also in
+         ADU, both input and output.
+
+         Also made some loops with division into loops with
+         multiplication for speed.
+
+  v3.2 : Took out above division loops.  Not quite right.  Copiles with -Wall!
+
+  v3.3 : Aborted.
+
+  v3.4 : Command line options -obs, -obz
+  
+         -obs : BSCALE for output images, overridden by -nbs for noise image
+         -obz : BZERO for output images, overridden by -nbz for noise image
+ 
+         The output convolved image has the background added in.  Took
+         out rectified and sign images.  If anyone cares, I really
+         will bring it back, but I think we've evolved past the need
+         for this.
+
+         Compile with -ansi and -pedantic-errors so we have somewhat
+         standard code.
+
+         Took out dependence on DATA_TYPE, old alard-ism...
+
+         Took out D_OUTNIBZERO, D_OUTNIBSCALE, D_HPCROSS (-hpc), and
+         related code.
+
+         Removed taking BSCALE,BZERO from input image.
+
+         Limited some internal loops to within hwKernel of border.  I
+         own Armin Rest 1 beer.
+
+	 Add DIFFIM to output header.
+
+	 Command line option -cmp
+
+	 -cmp : SM/SN-style .cmp file containing list of stars to use
+	        as kernel regions.  Equivalent to -ssf but formatting
+		taken into account.
+
+  v4.0 : all floats except for those representing image pixel values
+         are changed into doubles, gotta be careful with these matrix
+	 inversions!  important upgrade...
+
+	 switched to (h)istogram figure of merit by default...
+
+  v4.1 : various edits by Armin to improve -cmp, command line options -savexy, -ssss, -ng
+
+         -savexy : save positions of kernel stamp locations in output file
+	 -ng     : change # and shape of gaussians to use for kernel
+
+	 fixed bug in hp_fits_correct_output_header : have to set
+	 BITPIX each time its called, otherwise fits_resize_img can
+	 fail
+
+	 fixed selection of substamp regions to be more robust.
+	 subtractions fail much less frequently now!
+
+  v4.1.2 : command line options -inm
+
+         -inm    : input a mask that is NOT spread but whose pixels are ignored 
+	 -fullss : maximally divide image region up into LOTS of stamps
+                   NOT YET IMPLEMENTED!
+
+		   
+  v4.1.3 : command line options -inm
+
+         Also : changed initial method of stamp rejection in check_stamps
+	 now use weighted kernel sum and variance as benchmark
+	 
+	 Modified getStampStats and stampStats extensively
+	    getStampStats divides the stamp into kernel-size regions
+
+	 Masks now use bits
+	 CONDITIONS:
+	    0x00 = FOR SURE GOOD, USE
+	    0x01 = Equal to bad pixel value
+	    0x02 = Above or equal high (SATURATED)
+	    0x04 = Below or equal low (CRAPPY)
+	    0x08 = NaN
+	    0x10 = Too many bad pixels in convolution
+	 TYPES:
+	    0x20 = External mask
+	    0x40 = Spread pixel, still good itself
+	           Means different thing in input and output masks
+	           In : Spread input mask
+		   Out: Hit a bad pixel in the convolution
+		   
+	    0x80 = FOR SURE BAD, DO NOT USE
+
+	    0x8000 = 100% bad in the output image
+	    
+	    e.g 0xc0 = Spread AND bad
+
+	 TEMPORARY (input mask only)
+	    0x100 = getPsfCenters t: Do not use, bad
+	    0x200 = getPsfCenters t: Pixel being used by ANOTHER substamp, skip it!
+	    0x400 = getPsfCenters i: Do not use, bad
+	    0x800 = getPsfCenters i: Pixel being used by ANOTHER substamp, skip it!
+
+
+
+  v 5.0.0 : numerous changes.  command line options -sconv, -tmi, -imi, -omi, -kfm, -ssig
+
+          -sconv : all regions convolved in same direction, after 1st region decided
+	  -tmi   : template mask image
+	  -imi   : input image mask image
+	  -omi   : output mask fitsfile.  mask and noise are convolved like image, then the unconvolved
+	           part added in
+
+	  -ssig  : threshold for sigma clipping in sigmaclip()
+	  -kfm   : max fraction of the convolution kernel coeffs which leads to a 0x8000 mask pixel
+		   
+          Also, if -mous < 0, no masking at all is done in the actual
+	  image.  substantial changes to the stamp stats and use of
+	  them.  esp for accepting/rejecting bad stamps.  the masks
+	  have been incorporated into much of the program, including
+	  determining stamp centers (0x40 pixels ok, rest
+	  unacceptable) and image stats (if masked, do not use for
+	  stats).
+
+	  The figure of merit for convolution direction is now 3-sigma
+	  clipped.  You can use 3 options.  I seem to like the
+	  default, which is the sum of the diff*diff/image values,
+	  essentially the variance in the approximation the image
+	  pixel value has poisson noise.  The other methods draw
+	  straight from the distribution of difference pixels.
+	  
+	  This is a major upgrade.  However, it is considerably slower
+	  than v4.1.x, by a factor of 2.5.  Most of the hit occurs in
+	  spatial_convolve.  This is the cost of noise propogation and
+	  intelligent masking.  And unintelligent programming...
+
+	  gprof : v4.1.3
+	  --------------
+	  %   cumulative   self               self     total
+	  time   seconds   seconds    calls   s/call   s/call  name
+	  49.33    34.39    34.39        2    17.20    18.82  spatial_convolve
+	  17.93    46.89    12.50    10976     0.00     0.00  xy_conv_stamp
+	  8.80     53.02     6.13                             flcomp
+	  4.79     56.37     3.34      224     0.01     0.01  build_matrix0
+	  4.66     59.62     3.25    10510     0.00     0.00  make_kernel
+	  3.13     61.80     2.18      237     0.01     0.01  ludcmp
+	  2.18     63.31     1.52    12823     0.00     0.00  stampStats
+	  2.15     64.81     1.50       13     0.12     0.12  build_matrix
+	  1.43     65.81     1.00      512     0.00     0.00  getPsfCenters
+
+	  gprof : v5.0.0
+	  --------------
+	  %   cumulative   self               self     total
+	  time   seconds   seconds    calls   s/call   s/call  name
+	  60.84   110.85   110.85        2    55.42    57.17  spatial_convolve
+	  18.89   145.27    34.42    19698     0.00     0.00  xy_conv_stamp
+	  5.36    155.04     9.77       42     0.23     0.23  build_matrix
+	  3.88    162.11     7.07      412     0.02     0.02  ludcmp
+	  3.25    168.03     5.92      402     0.01     0.01  build_matrix0
+	  1.92    171.52     3.49    10510     0.00     0.00  make_kernel
+	  1.43    174.13     2.61      512     0.01     0.01  getPsfCenters
+	  1.00    175.96     1.83     3663     0.00     0.00  getStampStats2
+
+  v 5.0.1 : image stats are now sigma clipped, -ssig controls threshold.
+	  
+	  gprof : v5.0.1 (without -O3 and -funroll-loops)
+	  --------------
+
+	  %    cumulative   self              self     total
+	  time   seconds   seconds    calls   s/call   s/call  name
+	  40.13   127.03   127.03        2    63.52    65.25  spatial_convolve
+	  33.67   233.60   106.57      512     0.21     0.21  getPsfCenters
+	  10.43   266.60    33.00    20237     0.00     0.00  xy_conv_stamp
+	  4.33    280.32    13.72       36     0.38     0.38  build_matrix
+	  2.02    286.70     6.38      393     0.02     0.02  ludcmp
+	  1.94    292.83     6.13      413     0.01     0.01  build_matrix0
+	  1.58    297.82     4.99     3829     0.00     0.00  getStampStats3
+	  1.40    302.25     4.43     3841     0.00     0.00  sigma_clip
+	  1.10    305.73     3.48    10614     0.00     0.00  make_kernel
+	  1.06    309.10     3.37        2     1.69     1.69  spreadMask
+	  0.61    311.04     1.94     3309     0.00     0.00  make_model
+	  0.36    312.17     1.13                             main
+
+
+	  gprof : v5.0.1 (with -O3 and -funroll-loops) ZOOM!
+	  --------------
+
+	  %    cumulative   self              self     total
+	  time   seconds   seconds    calls   s/call   s/call  name
+	  44.10     85.70    85.70      512     0.17     0.17  getPsfCenters
+	  31.06    146.06    60.36        2    30.18    30.85  spatial_convolve
+	  12.12    169.61    23.55    20237     0.00     0.00  xy_conv_stamp
+	   3.18    175.79     6.18       36     0.17     0.17  build_matrix
+	   1.87    179.42     3.63     3829     0.00     0.00  getStampStats3
+	   1.80    182.91     3.49     3841     0.00     0.00  sigma_clip
+	   1.25    185.33     2.42        2     1.21     1.21  spreadMask
+	   1.00    187.27     1.94      393     0.00     0.00  ludcmp
+	   0.76    188.74     1.47      413     0.00     0.00  build_matrix0
+	   0.69    190.08     1.34    10614     0.00     0.00  make_kernel
+	  
+
+	  
+  v 5.0.2 : trying to speed up.  small change to sigma_clip.  also
+            getPsfCenters now breaks out of loop after it finds enough
+            centers.  very small improvements overall.
+	  
+ 	  %    cumulative   self              self     total
+ 	  time   seconds   seconds    calls   s/call   s/call  name
+ 	  44.38     85.76    85.76      512     0.17     0.17  getPsfCenters
+ 	  31.16    145.97    60.21        2    30.11    30.73  spatial_convolve
+ 	  12.13    169.41    23.44    20237     0.00     0.00  xy_conv_stamp
+ 	   3.19    175.57     6.16       36     0.17     0.17  build_matrix
+ 	   2.00    179.44     3.87     3829     0.00     0.00  getStampStats3
+ 	   1.35    182.04     2.60     3841     0.00     0.00  sigma_clip
+ 	   1.24    184.43     2.39        2     1.20     1.20  spreadMask
+ 	   1.03    186.43     2.00      393     0.01     0.01  ludcmp
+ 	   0.73    187.85     1.42      413     0.00     0.00  build_matrix0
+	   0.65    189.11     1.26    10614     0.00     0.00  make_kernel
+
+	  command line option -okn : option to rescale the noise in 'OK' pixels
+	  using the ratio
+
+	  diffsige/diffsig for OK pixels, divided by 
+	  diffsige/diffsig for GOOD pixels 
+	  
+
+   v 5.0.3
+
+	  updated getpsfcenters to use subroutine checkpsfcenter,
+	  which i will use in version 5.0.4 to check input substamp
+	  positions.  a variety of additional information placed in
+	  image header : DMEAN, DMEANO, DSIG, DSIGO, DSIGE, DSIGEO,
+	  NSCALO, NREGION.
+
+   v 5.0.4
+     
+          updated buildStamps to check input positions for bad pixels,
+	  such as when you input a .cmp file or other file for
+	  substamp positions.  the code will now reject them if they
+	  have masked or bad pixels in there.  its for the better.
+	  you can however turn off the automatic finding of additional
+	  substamp centers between how many you allocted and -nss by
+	  turning the -afssc flag off.
+
+          new command line option:
+          -afssc : auto-find additional substamp centers over and
+		   above what you allocate in your input x,y file.  if
+		   you want to be completely in control of the
+	 	   positions, turn this flag off.
+
+   v 5.0.5
+
+	  fixed new bug in allocateStamps
+
+
+   v 5.0.6
+ 
+          fixed new bug in buildStamps
+	  changed the memory allocation steps all around
+	    from realloc to calloc+free+calloc
+	    safety first
+
+
+   v 5.0.7 
+
+	  armin comes through again.  in rejection of substamps, i was
+	  rejecting things kerSigReject in the GOOD side as well as on
+	  the bad side, duh...
+
+
+   v 5.0.8 
+
+	  fixed minor bug regarding the masking of output pixels
+
+
+   v 5.1.0
+
+          calculated noise image in all cases now, since we require stats
+          fixed bug in determination of stamp stats, could get hung up with
+	     nans if there were too few good pixels.
+
+   v 5.1.1
+
+          X2NRM now really returns X2 instead of X..!
+
+   
+          changed the default value of D_KFITTHRESH to 10.  in blank images
+	    it could still find all sky noise peaks at 5.
+          [-ft fitthresh]   : RMS threshold for good centroid in kernel fit (10.0)
+
+
+          fixed a bug introduced about 5.0.6, where it reversed the sky values between
+	  image and template.  in times where they sky backgrounds are significantly
+	  different, it had a hard time finding stamp centers because
+	  of this.  damn...
+
+          also implemented the first verbosity management
+	  -v
+          defaults to 1.  '-v 2' makes more output. '-v 0' doesnt do anything yet but will.
+
+   v 5.1.2
+
+          changed hp_fits_correct_data to
+
+	      maxval =  32767. * bScale + bZero;
+	      minval = -32768. * bScale + bZero;
+
+	  from
+	      maxval =  32767. * bScale + bZero;
+	      minval = -32767. * bScale + bZero;
+
+	      
+	  dealt with input noise in a more reasonable way.  in particular before
+	  the convolution takes place, in getStampSig.  before i
+	  assumed the input image was the noise^2 to get the figure of
+	  merit #1.  now i actually read in the noise images and add
+	  them together.  this a much better approximation, barring
+	  the fact that the convolution kernel is not yet known.
+	  
+
+   v 5.1.3
+
+          made outer gaussian larger
+          #define D_SIG_GAUSS3  3.0 
+
+	  in the end, i think we want to scale the gaussians with seeing.
+	  e.g. python script goes like
+
+          > def scale_hpgauss(FWHM1, FWHM2, g1=0.7, g2=1.5, g3=3.0):
+          >     # under the assumption that these are the optimal
+          >     #  gaussians for a kernel 3pix fwhm :
+          >     #  scale up given seeing of 2 images
+          >
+          >     fmax = max(FWHM1, FWHM2)
+          >     frat = fmax / g3
+          >
+          >     return g1*frat, g2*frat, g3*frat
+
+          use fits_resize_img to change bitpix...
+
+
+          Added FSIG and FSCAT to fits header.  These are like SSSIG and SSSCAT but use
+	  the final noise image and are thus more correct.
+
+    v 5.1.4
+	  
+	  Did nothing.  	 
+
+    v 5.1.5
+
+	  Added feature to lower kerFitThresh if too small a fraction of stamps are
+	  returned with objects in them.  
+ 
+          -sft : scale fitthresh by this fraction - 0.5 - by default
+          -nft : if this fraction of stamps are not filled by objects
+
+          Currently this is limited to one loop, to prevent going to too low
+	  S/N.  Sometimes the data just don't have it...
+          
+
+    v 5.1.6
+
+          Got rid of this riduculous subroutine hp_fits_correct_output_header.
+          Am creating a new image from scratch and using
+	  hp_fits_copy_header to copy the header from the input to
+	  ouput files.
+
+          Taking some of the various checks out of the inner loops,
+	  test once and set mask and trust that it works.
+ 
+          e.g (dpt == fillVal)
+
+	  Changing the comparison of figures-of-merit to include the kernel sum (in alard.c)
+
+
+    v 5.1.7       
+
+          Got rid of a bug that caused caused status=1 after reading in a kernel image.
+          The new difference image will retain the same FSIG,FSCAT,NSCALO values 
+	  as the kernel image.
+
+
+    v 5.1.8
+
+          Fixed a bug when reading in the kernel from a previous image.
+          Fixed a bscale/bzero bug when writing out the convovled image
+ 	  Added some data/software provinence info to output header
+
+
+    v 5.1.9
+
+          Replaced the hardwired bits with variables.  See defaults.h.  I hope
+	  I did them all correctly..!
+
+	  Also did some changing of propagation of noise masks in spatial_convolve.
+
+    v 5.1.10
+           
+          Separate flag for output noise image being short, variable = outNShort, command
+	     line = -nsht.  Changed some of the guts of main.c to deal with this.
+
+	  Also, by popular demand, you can write a separate file with
+	  the kernel.  Its now -oki <fitsfile>.  
+
+          Also did more with the verbosity levels.
+
+          Allow -n "c", normalize to the convolved image, whichever that is.
+
+    v 5.1.11
+          Found a memory leak in extractkern 
+
+    v 5.xxx
+          Fixed minor bug on line 1359 (Taro Soto)
+          Another bug find by Soto in extractkern.c:make_kernel
+
+    v 5.xxx (not working yet)
+          Allows user to input basis functions for the kernel
+             -pca nk k0.fits ... n(k-1).fits
+
+
+  TODO   : Make multi-threaded by region..!
+	   Range of coordinates from -1 to 1 (build_matrix_new)
+	   Try delta function convolution kerntl
+           
