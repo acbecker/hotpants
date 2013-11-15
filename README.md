@@ -12,7 +12,7 @@ Note on usage: Your mileage will vary based on the configuration of the software
    * Instead, prefilter with Psf: I' = I x PSF
    *                              D' = I' - T x K'
    * Ideally K' = K x PSF
-   * This effectively makes the image you match T to have a large PSF by sqrt(2), avoiding deconvolution in many cases.
+   * This effectively makes the image you match T to (I') have a larger PSF by sqrt(2) compared do I, avoiding deconvolution in many cases.
 
    
 
