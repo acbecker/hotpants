@@ -5,12 +5,12 @@ Import of v5.1.11 of High Order Transform of Psf ANd Template Subtraction code (
 
 Note on usage: Your mileage will vary based on the configuration of the software.  The most important tuning parameter is the size of the gaussians that you use.  A good rule of thumb is, asssuming you have measured the widths of the Psfs in the science and template image:
 
- * Sigma_image < Sigma_template : This requires deconvolution (sharpening) of the template.  This will lead to false positives, in practice.  Consider convolving the science image instead (-c i).  OR, since you really don't want to mess with the science pixels unnecessarily, consider convolving the science image with its Psf *before* matching the template to it.  This process is typically done after image subtraction for optimal point source filtering; in this case, the image should not be convolved with anything before detection, or just convolved with a delta function.  E.g.
+ * Sigma_image < Sigma_template : This requires deconvolution (sharpening) of the template.  This will lead to false positives, in practice.  Consider convolving the science image instead (-c i).  OR, since you really don't want to mess with the science pixels unnecessarily, consider convolving the science image with its Psf *before* matching the template to it.  This process is typically done after image subtraction for optimal point source filtering; in this case, the image should not be convolved with anything before detection, or just convolved with a delta function.  I.e.
 
    * Difference Image: D = I - T x K
    * Detect on difference image: D' = D x PSF = I x PSF - T x K x PSF
    * Instead, prefilter with Psf: I' = I x PSF
-                                  D' = I' - T x K'
+   *                              D' = I' - T x K'
    * Ideally K' = K x PSF
    * This effectively makes the image you match T to have a large PSF by sqrt(2), avoiding deconvolution in many cases.
 
