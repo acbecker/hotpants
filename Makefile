@@ -27,7 +27,7 @@ LIBDIR        =  ../../cfitsio/lib
 
 # standard usage
 # recently added -std=c99 after a bug report
-COPTS = -funroll-loops -O3 -ansi -std=c99 -pedantic-errors -Wall -I$(CFITSIOINCDIR)
+COPTS = -funroll-loops -O3 -ansi -std=c99 -pedantic-errors -Wall -I$(CFITSIOINCDIR) -D_GNU_SOURCE
 LIBS  = -L$(LIBDIR) -lm -lcfitsio
 
 # compiler
