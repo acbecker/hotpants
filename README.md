@@ -19,7 +19,7 @@ Note on usage: Your mileage will vary based on the configuration of the software
  * Sigma_image > Sigma_template : This leads to smoothing of the template.  Assume that both Psfs are Gaussian, in which case the Gaussian that matches the two has Sigma_match = sqrt(Sigma_image**2 - Sigma_template**2).  It is recommended that this be the central Gaussian in your kernel basis, with the smallest one being 0.5 * Sigma_match and the largest being 2.0 * Sigma_match.  Set these using the -ng flag.  E.g. -ng 3 6 0.5*Sigma_match 4 Sigma_match 2 2.0*Sigma_match.
 
 ######### All command line options
-
+```
 Version 5.1.11
 Required options:
    [-inim fitsfile]  : comparison image to be differenced
@@ -138,3 +138,4 @@ Additional options:
        REGION??            (IRAF-format limits for each region in the image)
        CONVOL??            (which image was convolved for each region)
        KSUM??              (sum of the convolution kernel for each region)
+```
