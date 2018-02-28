@@ -3,7 +3,14 @@
 #include<string.h>
 #include<strings.h>
 #include<math.h>
-#include<malloc.h>
+
+#if !defined(__MACH__)
+#include <malloc.h>
+#endif
+#if defined(__MACH__)
+#include <stdlib.h>
+#endif
+
 #include<stdlib.h>
 #include<fitsio.h>
 
