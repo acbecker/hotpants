@@ -1,0 +1,41 @@
+name: hotpants
+base: core18
+type: app
+version: 'v5.1.11-snap0.1'
+website: https://ui.adsabs.harvard.edu/abs/2015ascl.soft04004B/abstract
+summary: High Order Transform of Psf ANd Template Subtraction
+description: |
+  It photometrically aligns one input image with
+  another after they have been astrometrically aligned.
+grade: devel
+confinement: strict
+license: MIT
+architectures: [amd64]
+
+parts:
+  hotpants:
+    plugin: make
+    source-type: git
+    source: https://github.com/acbecker/hotpants.git
+    source-commit: 63e126081509a52e96260acdcf2f77b31096c173  # Version 5.1.11
+    build-packages:
+      - libccfits-dev
+    stage-packages:
+      - libcfitsio5
+    override-build: |
+      make clean ; make
+      mkdir -pv $SNAPCRAFT_PART_INSTALL/bin/; \
+      mv -v $SNAPCRAFT_PART_BUILD/maskim \
+            $SNAPCRAFT_PART_BUILD/extractkern \
+            $SNAPCRAFT_PART_BUILD/hotpants \
+            $SNAPCRAFT_PART_INSTALL/bin/
+apps:
+  hotpants:
+    command: bin/hotpants
+    plugs: [home, removable-media, fuse-support]
+  maskim:
+    command: bin/maskim
+    plugs: [home, removable-media, fuse-support]
+  extractkern:
+    command: bin/extractkern
+    plugs: [home, removable-media, fuse-support]

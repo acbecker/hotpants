@@ -18,7 +18,8 @@ Note on usage: Your mileage will vary based on the configuration of the software
 
  * Sigma_image > Sigma_template : This leads to smoothing of the template.  Assume that both Psfs are Gaussian, in which case the Gaussian that matches the two has Sigma_match = sqrt(Sigma_image**2 - Sigma_template**2).  It is recommended that this be the central Gaussian in your kernel basis, with the smallest one being 0.5 * Sigma_match and the largest being 2.0 * Sigma_match.  Set these using the -ng flag.  E.g. -ng 3 6 0.5*Sigma_match 4 Sigma_match 2 2.0*Sigma_match.
 
-######### All command line options
+## All command line options
+
 ```
 Version 5.1.11
 Required options:
@@ -139,3 +140,58 @@ Additional options:
        CONVOL??            (which image was convolved for each region)
        KSUM??              (sum of the convolution kernel for each region)
 ```
+
+## Installing from sandbox
+
+### Docker
+
+```
+docker build docker/ -t hotpants
+docker run -it --rm -v /<your-dataset>:/workspace -v /<your-result>:/result hotpants
+```
+
+#### LIMITATION
+
+* The path of the docker volume must always be an absolute path or 
+  an environment variable that can be replaced by an absolute path.
+  (ex: `$PWD`, `$HOME`, ...)
+
+### Snap
+
+[![hotpants](https://snapcraft.io/hotpants/badge.svg)](https://snapcraft.io/hotpants)
+
+```
+sudo snap install hotpants --edge
+
+# commands:
+#   - hotpants
+#   - hotpants.extractkern
+#   - hotpants.maskim
+```
+
+#### Aliases
+
+```
+~$ sudo snap alias hotpants.extractkern extractkern
+  - hotpants.extractkern as extractkern
+
+~$ sudo snap alias hotpants.maskim maskim
+  - hotpants.maskim as maskim
+
+# commands:
+#   - hotpants
+#   - extractkern
+#   - maskim
+```
+
+
+
+#### LIMITATION
+
+* Available only if the dataset is under the `/home` directory.
+  * https://snapcraft.io/docs/home-interface
+  * If the location of the home is not common, please refer here: https://snapcraft.io/docs/home-outside-home 
+* It does not work with network file systems such as NFS or SAMBA.
+* See here for use with USB or fuse file system.
+  1. https://snapcraft.io/docs/removable-media-interface - **Requires manual activation**
+  2. https://snapcraft.io/docs/fuse-support-interface - **Requires manual activation**
